@@ -1,6 +1,10 @@
+import datetime
 import re
+import scryptcc
 from bs4 import BeautifulSoup
 
+
+# Move to another module.
 class Subsection:
     pagecount_pattern = re.compile(r'(\d+)\[\]')
 
@@ -16,16 +20,11 @@ class Subsection:
             pagecount = match.groups()[0]
         else:
             raise Exception("API did not respond with a pagecount.")
-        return (pagecount, body[match.end():])
+        return (int(pagecount), body[match.end():])
 
-
-import datetime
 
 # http://stackoverflow.com/a/947789
 non_decimal = lambda v: re.sub(r'[^\d.]+', '', v)
-
-import functools
-
 
 
 class Mining(Subsection):
@@ -42,10 +41,6 @@ class Mining(Subsection):
                 'comment': str}
     columns_order = ('timestamp', 'type', 'balance', 'comment')
     record_demarc = """<div id="b3"></div>"""
-
-    # We're calling this "class" here, but currently scrypt.cc uses "id"
-    # incorrectly.
-    html_class_map = {}
 
     def _transactions(self, **kwa):
         params = {}
@@ -64,21 +59,25 @@ class Mining(Subsection):
                     val = type_(non_decimal(v.string))
                     yield (k, val)
                 elif type_ is Mining.timestamp:
-                    val = type_(v.string+' '+self._c.config.main.get('tzoffset', '+0000'))
-                    yield ('raw_timestamp', v.string)
-                    yield (k, val)
+                    val = type_(v.string+' '+
+                                    self._c.config.main.get('tzoffset', '+0000'))
+                    yield 'raw_datetime', v.string
+                    yield k, val
                 else:
                     val = type_(v.string)
-                    yield (k, val)
+                    yield k, val
 
-        def parse_records():
-            for record in records_html:
-                yield dict(breakout_record(record))
+        for record in records_html:
+            rec_dict = dict(breakout_record(record))
+            if rec_dict:
+                yield pagecount, rec_dict
 
-        print(list(parse_records()))
+    def all(self, **kwa):
+        # Get first page of transactions along with count.
+        for count, transaction in self._transactions(**kwa):
+            yield transaction
 
-
-        #    yield {k: v.string for k,v in zip(self.columns.keys, soup.children)}
-
-
-
+        for p in range(2,count+1):
+            kwa['page'] = p
+            for count, transaction in self._transactions(**kwa):
+                yield transaction

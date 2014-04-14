@@ -1,3 +1,4 @@
+import time
 import logging
 import random
 import requests
@@ -14,6 +15,7 @@ CHROME_HEADER = ("""Mozilla/5.0 (Windows NT 6.1; WOW64) """
                  """AppleWebKit/537.36 (KHTML, like Gecko) """
                  """Chrome/34.0.1847.116 Safari/537.36""")
 
+THROTTLE = 0.1
 
 def ppr(resp, do_print=True):
     """Pretty print the URL source."""
@@ -79,6 +81,7 @@ class Base:
         kwa = self._prep_kwargs(**kwa)
         url = self._get_url(name)
         kwa['headers']['user-agent'] = CHROME_HEADER
+        time.sleep(THROTTLE) # This won't do shit once async
         resp = requests.get(url, **kwa)
         self._update_cookies(resp)
         return resp
@@ -90,6 +93,7 @@ class Base:
         kwa['headers']['origin'] = self.config.main['base_url']
         kwa['headers']['content-type'] = 'application/x-www-form-urlencoded'
         kwa['headers']['user-agent'] = CHROME_HEADER
+        time.sleep(THROTTLE) # This won't do shit once async
         resp = requests.post(url, **kwa)
         self._update_cookies(resp)
         return resp
