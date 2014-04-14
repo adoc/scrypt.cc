@@ -1,0 +1,3 @@
+[submodule "thredis"]
+	path = thredis
+	url = https://github.com/adoc/thredis
