@@ -1,10 +1,13 @@
 import time
-import logging
+import re
 import random
+import logging
 import requests
+import bs4
+import pytz
 
 from urllib.parse import urljoin
-from bs4 import BeautifulSoup
+
 
 
 __all__ = ('ppr', 'Connection')
@@ -20,7 +23,7 @@ THROTTLE = 0.1
 def ppr(resp, do_print=True):
     """Pretty print the URL source."""
     # resp = requests.get(url, verify=True)
-    soup = BeautifulSoup(resp.text)
+    soup = bs4.BeautifulSoup(resp.text)
     if do_print is True:
         print(soup.prettify())
     else:
@@ -33,6 +36,7 @@ class Connection:
     def __init__(self, config={}, init_root=True, login=True):
         """
         """
+        self.__tz = None
         self._cookiejar = {}
         self.config = config
         self.sid = self.config.auth.get('sid')
@@ -58,6 +62,12 @@ class Connection:
     @sid.setter
     def sid(self, val):
         self._cookiejar['sid'] = val
+
+    @property
+    def tz(self):
+        if self.__tz is None:
+            self.__tz = pytz.timezone(self.config.main['timezone'])
+        return self.__tz
 
     def _get_url(self, name):
         return urljoin(self.config.main['base_url'],

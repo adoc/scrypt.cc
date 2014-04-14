@@ -1,6 +1,8 @@
 """
 """
+import io
 import configparser
+import threading
 
 # =============================================================================
 # Source: paste.deploy.converters
@@ -94,27 +96,53 @@ def asdict(obj, expect_lists = True, list_sep = ','):
 
 
 class Config:
+    """Wierd config class that uses class attributes for type/default
+    when retrieving from configparser.
+    """
+    #TODO: Perhaps instead of using the class attrs, maybe use a dict
+    #   for clarity.
+
     main = {'base_url': '',
             'debug': False,
-            'tzoffset': ''}
+            'timezone': ''}
     auth = {'sid': '',
             'user': '',
             'pass': ''}
     api = {'uris': {}}
     api_methods = {'*': {}}
+    redis = {'url': '',
+             'namespace': '',
+             'user': '',
+             'pass': ''}
 
     def __init__(self, raw_config):
-        self._raw_config = raw_config
+        self.__parsed = None
+        self.__raw_config = raw_config
         self._parse_config()
 
+    @property
+    def config(self):
+        """Returns previously parsed config or parses the `raw_config`
+        if it's a string or file.
+        """
+        if self.__parsed is not None:
+            return self.__parsed
+        elif isinstance(self.__raw_config, io.IOBase):
+            attr = 'readfp'
+        elif isinstance(self.__raw_config, str):
+            attr = 'read_string'
+        else:
+            raise Exception("Expected the raw config to be a file or a string.")
+        self.__parsed = configparser.ConfigParser()
+        read = getattr(self.__parsed, attr) # Get read or read_string
+        read(self.__raw_config)
+        return self.__parsed
+
     def _parse_config(self):
-        config = configparser.ConfigParser()
-        config.read_string(self._raw_config)
-        
-        for section in config.sections():
+        for section in self.config.sections():
             if hasattr(self, section):
                 section_attr = getattr(self, section)
-                section = config[section]
+                section = self.config[section]
 
                 for item_key, item_val in section.items():
                     # Attempt to get the item, otherwise check for a '*'
@@ -135,3 +163,77 @@ class Config:
                         section_attr[item_key] = value.strip()
             else:
                 raise Exception("Encountered invalid section %s." % (section))
+
+
+
+# Source: codalib.procs
+class KillableThread(threading.Thread):
+    """Subclass of threading.Thread with kill signal functionality.
+    """
+
+    def __init__(self, *args, **kwa):
+        """Constructs a KillableThread object."""
+        threading.Thread.__init__(self, *args, **kwa)
+        self.__kill_event = threading.Event()
+
+    def kill(self):
+        """Sets kill signal for the thread.
+        """
+        self.__kill_event.set()
+
+    def __iskilled(self):
+        return self.__kill_event.isSet()
+
+    @property
+    def iskilled(self):
+        """Returns True if this thread has been sent a kill signal.
+        """
+        return self.__iskilled()
+
+
+class RepeatingTimer(KillableThread):
+    """Simple repeating timer.
+
+    param:pass_timer - pass Timer instance to the callback.
+    """
+
+    def __init__(self, interval, callback, pass_timer=False, halt_on_exc=False):
+        KillableThread.__init__(self)
+        self.__interval = interval
+        self.__callback = callback
+        self.__pass_timer = pass_timer
+        self.__halt_on_exc = halt_on_exc
+
+    # Protected props.
+    @property
+    def interval(self):
+        return self.__interval
+
+    @property
+    def pass_timer(self):
+        return self.__pass_timer
+
+    @property
+    def halt_on_exc(self):
+        return self.__halt_on_exc
+
+    def callback(self):
+        try:
+            if self.pass_timer is True:
+                return self.__callback(self)
+            else:
+                return self.__callback()
+        except:
+            if self.halt_on_exc:
+                self.cancel()
+            raise
+
+    def run(self):
+        while self.iskilled is not True:
+            timer = threading.Timer(self.interval, self.callback)
+            timer.start()
+            timer.join()
+            # Don't forget to join() in future implementations! (???)
+
+    def cancel(self):
+        self.kill()

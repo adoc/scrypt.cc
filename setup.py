@@ -8,7 +8,8 @@ CHANGES = '' #open(os.path.join(here, 'CHANGES.txt')).read()
 
 requires = [
     'requests',
-    'beautifulsoup4'
+    'beautifulsoup4',
+    'pytz'
     ]
 
 setup(name='scryptcc',
@@ -23,6 +24,7 @@ setup(name='scryptcc',
       url='https://github.com/adoc',
       keywords='scrypt.cc scrape api',
       packages=('scryptcc',),
+      scripts=('bin/tracker.py',),
       include_package_data=True,
       zip_safe=False,
       install_requires=requires,

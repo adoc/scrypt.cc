@@ -1,7 +1,11 @@
-import datetime
 import re
+import math
+import time
+import datetime
 import bs4
+import pytz
 import scryptcc
+
 
 
 # http://stackoverflow.com/a/947789
@@ -15,12 +19,12 @@ class Mining(scryptcc.Subsection):
     def timestamp(d):
         return datetime.datetime.strptime(d, Mining.datetime_pattern)
 
-    datetime_pattern = '%Y-%m-%d %H:%M:%S %z'
-    columns = {'timestamp': timestamp.__func__,
+    datetime_pattern = '%Y-%m-%d %H:%M:%S'
+    columns = {'datetime': timestamp.__func__,
                 'type': str,
                 'balance': float,
                 'comment': str}
-    columns_order = ('timestamp', 'type', 'balance', 'comment')
+    columns_order = ('datetime', 'type', 'balance', 'comment')
     record_demarc = """<div id="b3"></div>"""
 
     def _transactions(self, **kwa):
@@ -34,6 +38,7 @@ class Mining(scryptcc.Subsection):
 
         # This can be a method on the class.
         def breakout_record(record):
+            
             soup = bs4.BeautifulSoup(record)
             for k, v in zip(self.columns_order, soup.children):
                 type_ = self.columns[k]
@@ -41,10 +46,13 @@ class Mining(scryptcc.Subsection):
                     val = type_(non_decimal(v.string))
                     yield (k, val)
                 elif type_ is Mining.timestamp:
-                    val = type_(v.string+' '+
-                                    self._c.config.main.get('tzoffset', '+0000'))
-                    yield 'raw_datetime', v.string
-                    yield k, val
+                    dt = type_(v.string)
+                    ldt = self._c.tz.localize(dt) # Localize the timestamp to the known timezone.
+                    utc = (ldt-ldt.utcoffset()).replace(tzinfo=pytz.utc) # Get and localize the UTC.
+                    yield 'ts_raw', v.string # String received from scryptcc.
+                    yield 'ts_localized', ldt # Localized datetime.
+                    yield 'ts_epoch', math.ceil(utc.timestamp())
+                    yield 'ts_utc', utc
                 else:
                     val = type_(v.string)
                     yield k, val
