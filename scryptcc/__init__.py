@@ -7,7 +7,7 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 
-__all__ = ('ppr', 'Base')
+__all__ = ('ppr', 'Connection')
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ def ppr(resp, do_print=True):
         return soup.prettify()
 
 
-class Base:
+class Connection:
     # Get this from config maybe???
 
     def __init__(self, config={}, init_root=True, login=True):
@@ -130,3 +130,22 @@ class Base:
         kwa['headers']['x-requested-with'] = 'XMLHttpRequest'
 
         return self.get('api', **kwa)
+
+
+class Subsection:
+    """All API sub-sections will subclass from this. (Mining, Tracking, etc.)"""
+    pagecount_pattern = re.compile(r'(\d+)\[\]')
+
+    def __init__(self, connection):
+        self._c = connection
+
+    def _get_pagecount(self, body):
+        """
+        Returns tuple of (pagecount, stripped_body)
+        """
+        match = self.pagecount_pattern.match(body)
+        if match:
+            pagecount = match.groups()[0]
+        else:
+            raise Exception("API did not respond with a pagecount.")
+        return (int(pagecount), body[match.end():])

@@ -1,40 +1,21 @@
 import datetime
 import re
+import bs4
 import scryptcc
-from bs4 import BeautifulSoup
-
-
-# Move to another module.
-class Subsection:
-    pagecount_pattern = re.compile(r'(\d+)\[\]')
-
-    def __init__(self, connection):
-        self._c = connection
-
-    def _get_pagecount(self, body):
-        """
-        Returns tuple of (pagecount, stripped_body)
-        """
-        match = self.pagecount_pattern.match(body)
-        if match:
-            pagecount = match.groups()[0]
-        else:
-            raise Exception("API did not respond with a pagecount.")
-        return (int(pagecount), body[match.end():])
 
 
 # http://stackoverflow.com/a/947789
 non_decimal = lambda v: re.sub(r'[^\d.]+', '', v)
 
 
-class Mining(Subsection):
-
-    datetime_pattern = '%Y-%m-%d %H:%M:%S %z'
+class Mining(scryptcc.Subsection):
+    """Mining API Wrapper. (Mining Transasctions)"""
 
     @staticmethod
     def timestamp(d):
         return datetime.datetime.strptime(d, Mining.datetime_pattern)
 
+    datetime_pattern = '%Y-%m-%d %H:%M:%S %z'
     columns = {'timestamp': timestamp.__func__,
                 'type': str,
                 'balance': float,
@@ -51,8 +32,9 @@ class Mining(Subsection):
 
         records_html = body.split(self.record_demarc)
 
+        # This can be a method on the class.
         def breakout_record(record):
-            soup = BeautifulSoup(record)
+            soup = bs4.BeautifulSoup(record)
             for k, v in zip(self.columns_order, soup.children):
                 type_ = self.columns[k]
                 if type_ is float:
