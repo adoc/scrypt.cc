@@ -1,8 +1,15 @@
+"""Just some general utils for use by `scryptcc`.
+
+* All from other libraries with citations.
 """
-"""
-import io
-import configparser
+import time
 import threading
+
+
+__all__ = ('asbool', 'asint', 'aslist', 'asdict', 'RepeatingTimer')
+
+
+THROTTLE = 0.01
 
 # =============================================================================
 # Source: paste.deploy.converters
@@ -48,32 +55,9 @@ def aslist(obj, sep=None, strip=True):
 
 
 # Source: codalib.paste.converters
-# Where is this in the django code?? Or did I write this??
-# This should be recursive
-def asdict(obj, expect_lists = True, list_sep = ','):
-    """Simple Dictionary Converter using the Django method.
-    **There are error and assert cases that should be included in this method."""
-
-    if isinstance(obj, str):
-        def split_object():
-            for item in obj.split('\n'):
-                try:
-                    key, val = item.split('=')
-                except ValueError:
-                    # Why just pass??
-                    pass
-                else:
-                    key, val = key.strip(), val.strip()
-
-                    if list_sep in val and expect_lists:
-                        val = aslist(val, sep=list_sep)
-                        val = filter(None, val)
-
-                    yield key, val
-
-        return {k:v for k, v in split_object()}
-
-def asdict(obj, expect_lists = True, list_sep = ','):
+# Where is this in the django code?? Can't find it.
+# Or did I write this mess??
+def asdict(obj, expect_lists = True, list_sep = ',', dict_type=dict):
     """Simple Dictionary Converter using the Django method.
     **There are error and assert cases that should be included in this method."""
 
@@ -90,80 +74,8 @@ def asdict(obj, expect_lists = True, list_sep = ','):
                     if list_sep in val and expect_lists:
                         val = aslist(val, sep=list_sep)
                         val = filter(None, val)
-
                     yield key, val
-        return {k:v for k, v in split_object()}
-
-
-class Config:
-    """Wierd config class that uses class attributes for type/default
-    when retrieving from configparser.
-    """
-    #TODO: Perhaps instead of using the class attrs, maybe use a dict
-    #   for clarity.
-
-    main = {'base_url': '',
-            'debug': False,
-            'timezone': ''}
-    auth = {'sid': '',
-            'user': '',
-            'pass': ''}
-    api = {'uris': {}}
-    api_methods = {'*': {}}
-    redis = {'url': '',
-             'namespace': '',
-             'user': '',
-             'pass': ''}
-
-    def __init__(self, raw_config):
-        self.__parsed = None
-        self.__raw_config = raw_config
-        self._parse_config()
-
-    @property
-    def config(self):
-        """Returns previously parsed config or parses the `raw_config`
-        if it's a string or file.
-        """
-        if self.__parsed is not None:
-            return self.__parsed
-        elif isinstance(self.__raw_config, io.IOBase):
-            attr = 'readfp'
-        elif isinstance(self.__raw_config, str):
-            attr = 'read_string'
-        else:
-            raise Exception("Expected the raw config to be a file or a string.")
-        self.__parsed = configparser.ConfigParser()
-        read = getattr(self.__parsed, attr) # Get read or read_string
-        read(self.__raw_config)
-        return self.__parsed
-
-    def _parse_config(self):
-        for section in self.config.sections():
-            if hasattr(self, section):
-                section_attr = getattr(self, section)
-                section = self.config[section]
-
-                for item_key, item_val in section.items():
-                    # Attempt to get the item, otherwise check for a '*'
-                    # key.
-                    item_attr = section_attr.get(item_key,
-                                section_attr.get('*', ''))
-                    value = section.get(item_key, type(item_attr)())
-
-                    if isinstance(item_attr, dict):
-                        section_attr[item_key] = asdict(value)
-                    elif isinstance(item_attr, bool):
-                        section_attr[item_key] = asbool(value)
-                    elif isinstance(item_attr, int):
-                        section_attr[item_key] = asint(value)
-                    elif isinstance(item_attr, list):
-                        section_attr[item_key] = aslist(value)
-                    else:
-                        section_attr[item_key] = value.strip()
-            else:
-                raise Exception("Encountered invalid section %s." % (section))
-
+        return dict_type((k, v) for k, v in split_object())
 
 
 # Source: codalib.procs
@@ -203,6 +115,7 @@ class RepeatingTimer(KillableThread):
         self.__callback = callback
         self.__pass_timer = pass_timer
         self.__halt_on_exc = halt_on_exc
+        self.__timer = None
 
     # Protected props.
     @property
@@ -229,11 +142,15 @@ class RepeatingTimer(KillableThread):
             raise
 
     def run(self):
+        # Note: Instead of joining the timer, we handle our own loop
+        #   that watches it.
         while self.iskilled is not True:
-            timer = threading.Timer(self.interval, self.callback)
-            timer.start()
-            timer.join()
-            # Don't forget to join() in future implementations! (???)
+            if self.__timer is None or self.__timer.is_alive() is False:
+                self.__timer = threading.Timer(self.interval, self.callback)
+                self.__timer.start()
+            time.sleep(THROTTLE)
 
     def cancel(self):
+        if self.__timer is not None:
+            self.__timer.cancel()
         self.kill()

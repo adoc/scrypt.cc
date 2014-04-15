@@ -13,15 +13,23 @@ requires = [
     ]
 
 setup(name='scryptcc',
-      version='0.1',
-      description='scrypt.cc Scrape API',
-      long_description=README + '\n\n' + CHANGES,
-      classifiers=[
-        "Programming Language :: Python",
-        ],
+      version='0.0.1',
       author='adoc',
       author_email='adoc@code.webmob.net',
-      url='https://github.com/adoc',
+      url='https://code.webmob.net/scryptcc'
+      download_url='https://github.com/adoc',
+      license='http://opensource.org/licenses/MIT',
+      description='scrypt.cc Scraper/API Wrapper',
+      long_description=README + '\n\n' + CHANGES,
+      classifiers=[
+        "Programming Language :: Python :: 3.3",
+        "Development Status :: 2 - Pre-Alpha",
+        "Environment :: Console",
+        "Environment :: Web Environment",
+        "Framework :: Pyramid",
+        "License :: OSI Approved :: MIT License",
+        "Natural Language :: English"
+        ],
       keywords='scrypt.cc scrape api',
       packages=('scryptcc',),
       scripts=('bin/tracker.py',),
