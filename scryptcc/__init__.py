@@ -105,18 +105,18 @@ class Config:
     def from_fp(cls, fp, **kwa):
         config = cls.__parser__()
         config.readfp(fp)
-        return cls(config, **kwa)
+        return cls(config, **kwa).parsed
 
     @classmethod
     def from_fn(cls, fn, **kwa):
         config = cls.__parser__()
         config.read(fn)
-        return cls(config, **kwa)
+        return cls(config, **kwa).parsed
 
     @classmethod
     def from_string(cls, string, **kwa):
         config = cls.__parser__()
-        config.read_string(string)
+        config.read_string(string).parsed
         return cls(config, **kwa)
 
     @property
@@ -172,7 +172,7 @@ class Connection:
     def __init__(self, config, init_root=False, login=False, debug=False):
         """
         """
-        self.__config = config.parsed
+        self.__config = config
         self.__tz = None
         self.__cookiejar = {}
         self.__debug =  debug or self.config['main'].get('debug', False)
@@ -315,8 +315,6 @@ class Section(Connection):
     def post_params(self):
         return self.local_config['post_params']
 
-
-
     def _parse_pagecount(self, body):
         """
         Returns tuple of (pagecount, stripped_body)
@@ -334,7 +332,6 @@ class Section(Connection):
         attribute and yield the key/value pairs.
         """
         soup = bs4.BeautifulSoup(record)
-
         # This is an ordereddict, so keys should be ordered.
         for k, v in zip(self.columns.keys(), soup.children):
             type_ = self.columns[k]
@@ -343,6 +340,7 @@ class Section(Connection):
                 yield k, val
             elif type_ is timestamp:
                 dt = type_(self, v.string)
+                # This can be slow if PYTZ is in a zipped egg.
                 ldt = self.tz.localize(dt) # Localize the timestamp to the known timezone.
                 utc = (ldt-ldt.utcoffset()).replace(tzinfo=pytz.utc) # Get and localize the UTC.
                 yield 'ts_raw', v.string # String received from scryptcc.
