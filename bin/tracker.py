@@ -19,10 +19,13 @@ uBTC = 1000000
 mBTC = 1000
 
 
+
+
+
 def process_transactions(api, records, identities):
     def do_process(timer, resync=False):
         logger = logging.getLogger('tracker.process_transactions')
-        logger.warn('Checking API...')
+        logger.info('Checking API...')
         logger.debug('Executed by timer %s.' % timer)
 
         try:
@@ -32,7 +35,7 @@ def process_transactions(api, records, identities):
                 timestamp = transaction['ts_epoch']
 
                 if resync is False and identities.ismember(timestamp):
-                    logger.warn('No new records...')
+                    logger.info('No new records...')
                     logger.debug('Reached last recorded transaction after %s iterations.' % i)
                     break
                 else:
@@ -46,7 +49,7 @@ def process_transactions(api, records, identities):
                                 int(transaction['balance']*SATOSHIO)))
                     elif api.section == 'orders_api':
                         logger.warn('Processing %s ORDER transaction that occured at %s '
-                            '(%0.4fBTC x %sKHS = %0.4fBTC Total).' % (
+                            '(%0.6fBTC x %sKHS = %0.6fBTC Total).' % (
                                 transaction['type'],
                                 transaction['ts_utc'].strftime('%Y-%m-%d %H:%M:%S %Z'),
                                 transaction['unit_btc'],
@@ -64,6 +67,25 @@ def process_transactions(api, records, identities):
         finally:
             logger.warn('Press (Q) to end.')
     return do_process
+
+
+class Fire:
+    def __init__(self, config, resync=False):
+        self.__resync = resync
+        self.__config = config
+
+
+def _do(session, namespace, resync=False):
+    # Set up mining transactions.
+    # The key of the hash is the epoch timestamp of the transaction.
+    records = thredis.model.Hash(config['persistence']['namespace'], 'h',
+            'mining_transactions','record', session=r_session)
+    # Ident is the epoch timestamp of the transaction (in utc)
+    ident = thredis.model.Set(config['persistence']['namespace'], 's',
+            'mining_transactions','ident', session=r_session)
+    # Set up scrypt.cc API connection
+    api = scryptcc.Section('mining_api', config=config)
+    return process_transactions(api, records, ident)
 
 
 def fire(config, resync=False):

@@ -326,29 +326,28 @@ class Section(Connection):
             raise Exception("API did not respond with a pagecount.")
         return (int(pagecount), body[match.end():])
 
-    def _breakout_record(self, record):
+    def _breakout_record(self, parsed_columns):
         """Breaks in to a single "record" line from the Scrypt.cc API.
         Parse values in to expected data types based on `columns`
         attribute and yield the key/value pairs.
         """
-        soup = bs4.BeautifulSoup(record)
         # This is an ordereddict, so keys should be ordered.
-        for k, v in zip(self.columns.keys(), soup.children):
+        for k, v in zip(self.columns.keys(), parsed_columns):
             type_ = self.columns[k]
             if type_ is float:
-                val = type_(non_decimal(v.string))
+                val = type_(non_decimal(v))
                 yield k, val
             elif type_ is timestamp:
-                dt = type_(self, v.string)
+                dt = type_(self, v)
                 # This can be slow if PYTZ is in a zipped egg.
                 ldt = self.tz.localize(dt) # Localize the timestamp to the known timezone.
                 utc = (ldt-ldt.utcoffset()).replace(tzinfo=pytz.utc) # Get and localize the UTC.
-                yield 'ts_raw', v.string # String received from scryptcc.
+                yield 'ts_raw', v # String received from scryptcc.
                 yield 'ts_localized', ldt # Localized datetime.
                 yield 'ts_epoch', math.ceil(utc.timestamp())
                 yield 'ts_utc', utc
             else:
-                val = type_(v.string)
+                val = type_(v)
                 yield k, val
 
     def _transactions(self, **kwa):
@@ -359,7 +358,10 @@ class Section(Connection):
         records_html = body.split(self.local_config['record_demarc'])
         # Iterate and break out the records.
         for record in records_html:
-            rec_dict = dict(self._breakout_record(record))
+            soup = bs4.BeautifulSoup(record)
+            rec_dict = dict(
+                            self._breakout_record(
+                                tuple(v.string for v in soup.children)))
             if rec_dict:
                 yield pagecount, rec_dict
 
