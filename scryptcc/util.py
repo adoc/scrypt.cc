@@ -2,14 +2,12 @@
 
 * All from other libraries with citations.
 """
-import time
-import threading
+
+__all__ = ('asbool', 'asint', 'aslist', 'asdict', 'RepeatingTimer',
+            'PosixFlushStdin')
 
 
-__all__ = ('asbool', 'asint', 'aslist', 'asdict', 'RepeatingTimer')
 
-
-THROTTLE = 0.01
 
 # =============================================================================
 # Source: paste.deploy.converters
@@ -76,6 +74,13 @@ def asdict(obj, expect_lists = True, list_sep = ',', dict_type=dict):
                         val = filter(None, val)
                     yield key, val
         return dict_type((k, v) for k, v in split_object())
+
+
+import time
+import threading
+
+
+THROTTLE = 0.01
 
 
 # Source: codalib.procs
@@ -154,3 +159,30 @@ class RepeatingTimer(KillableThread):
         if self.__timer is not None:
             self.__timer.cancel()
         self.kill()
+
+
+import os
+import sys
+import fcntl
+import termios
+
+
+class PosixFlushStdin:
+    """
+    Refactored version of the original. (Credit to original author.)
+    https://docs.python.org/2/faq/library.html#how-do-i-get-a-single-keypress-at-a-time
+    """
+    def __init__(self, ):
+        self.__fd = sys.stdin.fileno()
+        self.__oldterm = termios.tcgetattr(self.__fd)
+
+    def flush(self):
+        newattr = termios.tcgetattr(self.__fd)
+        newattr[3] = newattr[3] & ~termios.ICANON & ~termios.ECHO
+        termios.tcsetattr(self.__fd, termios.TCSANOW, newattr)
+        self.__oldflags = fcntl.fcntl(self.__fd, fcntl.F_GETFL)
+        fcntl.fcntl(self.__fd, fcntl.F_SETFL, self.__oldflags | os.O_NONBLOCK)
+
+    def block(self):
+        termios.tcsetattr(self.__fd, termios.TCSAFLUSH, self.__oldterm)
+        fcntl.fcntl(self.__fd, fcntl.F_SETFL, self.__oldflags)

@@ -73,7 +73,11 @@ CONFIG_SECTIONS = {
             'home': str,
             'api': str
         },
+        'tracker': {
+            'sections': list
+        },
         'api_defaults': {
+            'require_auth': bool,
             'pagecount_pattern': Regex,
             'record_demarc': str,
             'datetime_pattern': str,
@@ -87,7 +91,10 @@ CONFIG_SECTIONS = {
         }
     }
 
-CONFIG_SECTIONS['orders_api'] = CONFIG_SECTIONS['mining_api'] = CONFIG_SECTIONS['api_defaults']
+
+CONFIG_SECTIONS['withdraws_api'] = CONFIG_SECTIONS['deposits_api'] = \
+    CONFIG_SECTIONS['orders_api'] = CONFIG_SECTIONS['mining_api'] = \
+    CONFIG_SECTIONS['api_defaults']
 
 
 class Config:
@@ -161,7 +168,7 @@ class Config:
 
                     yield section, sec_dict
                 except KeyError:
-                    raise KeyError("Encountered section %s not in template." %
+                    raise KeyError("Encountered section '%s' not in template." %
                                    (section))
 
         return dict(breakout_config(parser_config))

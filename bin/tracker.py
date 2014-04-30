@@ -55,6 +55,7 @@ def process_transactions(api, records, identities):
                                 transaction['unit_btc'],
                                 transaction['quant_khs'],
                                 transaction['total_btc']))
+
                     logger.debug('Adding transaction %s to persistance.' % transaction)
                     records.set(timestamp, transaction)
                     records.session.execute() # This executes the entire pipeline for this thread.
@@ -73,6 +74,34 @@ class Fire:
     def __init__(self, config, resync=False):
         self.__resync = resync
         self.__config = config
+
+
+    def eloop(*timers):
+        """ Main "event" loop."""
+        # 
+        # Most of this is just who-knows-what since "fcntl" scares me a lot. :D
+        terminal = scryptcc.util.PosixFlushStdin()
+        
+        terminal.flush() # Allow key presses without blocking for input.
+
+        try:
+            while timers[0].iskilled is False:
+                try:
+                    c = sys.stdin.read(1)
+                    if c.lower() == 'q':
+                        logging.warn("Exiting upon request...")
+                        logging.debug("Canceling API timer.")
+                        for timer in timers:
+                            timer.cancel()
+                    elif c.lower() == 'm':
+                        logging.warn("Showing Mining stats...")
+                        
+                except IOError: pass
+                # Throttle the loop.
+                time.sleep(0.2)
+        finally:
+            terminal.block() # Reset input to block.
+
 
 
 def _do(session, namespace, resync=False):
@@ -103,6 +132,7 @@ def fire(config, resync=False):
     mining_api = scryptcc.Section('mining_api', config=config)
     mining_callback = process_transactions(mining_api, r_rec, r_ident)
 
+
     #Set up order transactions.
     r_rec = thredis.model.Hash(config['persistence']['namespace'], 'h',
             'order_transactions','record', session=r_session)
@@ -127,35 +157,7 @@ def fire(config, resync=False):
     loop(mining_timer, orders_timer) # Instead of joining, we run our own loop.
 
 
-def loop(*timers):
-    # src: https://docs.python.org/2/faq/library.html#how-do-i-get-a-single-keypress-at-a-time
-    # Most of this is just who-knows-what since "fcntl" scares me a lot. :D
-    import termios, fcntl, sys, os
-    fd = sys.stdin.fileno()
 
-    oldterm = termios.tcgetattr(fd)
-    newattr = termios.tcgetattr(fd)
-    newattr[3] = newattr[3] & ~termios.ICANON & ~termios.ECHO
-    termios.tcsetattr(fd, termios.TCSANOW, newattr)
-
-    oldflags = fcntl.fcntl(fd, fcntl.F_GETFL)
-    fcntl.fcntl(fd, fcntl.F_SETFL, oldflags | os.O_NONBLOCK)
-
-    try:
-        while timers[0].iskilled is False:
-            try:
-                c = sys.stdin.read(1)
-                if c.lower() == 'q':
-                    logging.warn("Exiting upon request...")
-                    logging.debug("Canceling API timer.")
-                    for timer in timers:
-                        timer.cancel()
-            except IOError: pass
-            # Throttle the loop.
-            time.sleep(0.2)
-    finally:
-        termios.tcsetattr(fd, termios.TCSAFLUSH, oldterm)
-        fcntl.fcntl(fd, fcntl.F_SETFL, oldflags)
 
 
 def setuplogging(config):
